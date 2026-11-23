@@ -1,0 +1,2226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>3D Гонка — 3 полосы + Турбо</title>
+  <style>
+    :root {
+      --bg: #07090d;
+      --panel: rgba(10, 15, 24, 0.82);
+      --border: rgba(255, 255, 255, 0.16);
+      --accent: #38ef7d;
+      --turbo: #00d2ff;
+      --turbo-hot: #ff4b2b;
+      --danger: #ff2a6d;
+      --text: #eef4fa;
+      --muted: #8a97a8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #game-wrap {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    #turbo-vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 4;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      box-shadow: inset 0 0 90px rgba(0, 210, 255, 0.65), inset 0 0 30px rgba(255, 75, 43, 0.45);
+    }
+    #turbo-vignette.active { opacity: 1; }
+
+    #ui-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .hud {
+      margin: 10px 14px;
+      padding: 9px 16px;
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      pointer-events: auto;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    .hud-item { display: flex; align-items: baseline; gap: 5px; font-variant-numeric: tabular-nums; }
+    .hud-speed { color: var(--accent); text-shadow: 0 0 10px rgba(56, 239, 125, 0.5); }
+    .hud-speed.turbo { color: var(--turbo); text-shadow: 0 0 14px rgba(0, 210, 255, 0.85); }
+
+    .top-actions {
+      position: fixed;
+      top: 64px;
+      right: 14px;
+      display: none;
+      flex-direction: column;
+      gap: 7px;
+      z-index: 12;
+      pointer-events: auto;
+    }
+
+    .mini-btn {
+      padding: 7px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(10, 15, 24, 0.72);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .mini-btn:active { transform: scale(0.95); }
+
+    /* Кнопка ТУРБО (работает и в портрете, и в альбоме) */
+    #turbo-wrap {
+      position: fixed;
+      right: 18px;
+      bottom: 24px;
+      z-index: 14;
+      display: none;
+      pointer-events: auto;
+    }
+
+    #btn-turbo {
+      position: relative;
+      width: 112px;
+      height: 58px;
+      border-radius: 16px;
+      border: 2px solid rgba(0, 210, 255, 0.75);
+      background: rgba(8, 18, 30, 0.78);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      overflow: hidden;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 0 20px rgba(0, 210, 255, 0.35);
+      transition: transform 0.1s, border-color 0.2s, box-shadow 0.2s;
+    }
+
+    #btn-turbo:active:not(:disabled) { transform: scale(0.94); }
+
+    #btn-turbo.active {
+      border-color: var(--turbo-hot);
+      box-shadow: 0 0 26px rgba(255, 75, 43, 0.75);
+    }
+
+    #btn-turbo.recharging {
+      border-color: rgba(255, 255, 255, 0.25);
+      box-shadow: none;
+      opacity: 0.85;
+      cursor: default;
+    }
+
+    #turbo-bar {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 100%;
+      background: linear-gradient(90deg, rgba(0, 210, 255, 0.45), rgba(56, 239, 125, 0.45));
+      z-index: 0;
+      transition: width 0.08s linear;
+    }
+
+    #btn-turbo.active #turbo-bar {
+      background: linear-gradient(90deg, rgba(255, 75, 43, 0.75), rgba(255, 184, 0, 0.75));
+    }
+
+    #btn-turbo.recharging #turbo-bar {
+      background: linear-gradient(90deg, rgba(0, 210, 255, 0.28), rgba(0, 210, 255, 0.42));
+    }
+
+    #turbo-label {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      line-height: 1.15;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    }
+
+    #turbo-sub {
+      font-size: 10px;
+      font-weight: 700;
+      color: #d6f3ff;
+    }
+
+    /* Кнопки управления в альбомном режиме */
+    #landscape-controls {
+      position: fixed;
+      left: 0; right: 0; bottom: 16px;
+      padding: 0 22px;
+      display: none;
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+      z-index: 12;
+      transition: opacity 0.25s;
+    }
+
+    .control-group {
+      display: flex;
+      gap: 14px;
+      pointer-events: auto;
+      align-items: flex-end;
+    }
+
+    .touch-btn {
+      width: 68px; height: 68px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      border: 2px solid rgba(255, 255, 255, 0.38);
+      color: #fff;
+      font-size: 20px;
+      font-weight: 800;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+    .touch-btn.active { background: rgba(255, 255, 255, 0.45); transform: scale(0.93); }
+    .touch-btn-gas { width: 76px; height: 76px; background: rgba(56, 239, 125, 0.22); border-color: rgba(56, 239, 125, 0.65); font-size: 15px; }
+    .touch-btn-brake { background: rgba(255, 42, 109, 0.22); border-color: rgba(255, 42, 109, 0.65); font-size: 13px; }
+
+    @media (orientation: landscape) {
+      .hud { margin: 8px 12px; padding: 7px 14px; font-size: 14px; }
+      .top-actions { top: 52px; right: 12px; flex-direction: row; }
+      #turbo-wrap { right: 22px; bottom: 100px; }
+      #btn-turbo { width: 104px; height: 48px; font-size: 13px; }
+    }
+
+    /* Экраны меню */
+    .screen {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: radial-gradient(ellipse at 50% 35%, rgba(16, 28, 46, 0.92), rgba(6, 9, 15, 0.98));
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      pointer-events: auto;
+      text-align: center;
+    }
+    .hidden { display: none !important; }
+
+    h1 {
+      font-size: 42px;
+      margin-bottom: 10px;
+      background: linear-gradient(45deg, #00d2ff, #38ef7d);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: 2px;
+    }
+
+    p.hint {
+      font-size: 15px;
+      color: var(--muted);
+      max-width: 420px;
+      line-height: 1.45;
+      margin-bottom: 24px;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 240px;
+    }
+
+    button.btn {
+      padding: 15px 24px;
+      border-radius: 16px;
+      border: none;
+      font-size: 17px;
+      font-weight: 800;
+      text-transform: uppercase;
+      cursor: pointer;
+      color: #041b1d;
+      background: linear-gradient(135deg, #00d2ff, #38ef7d);
+      box-shadow: 0 8px 22px rgba(0, 210, 255, 0.3);
+    }
+    button.btn:active { transform: scale(0.96); }
+    button.btn.secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border: 1px solid var(--border);
+      box-shadow: none;
+    }
+    button.btn.continue {
+      background: linear-gradient(135deg, #ffb800, #ff5e62);
+      color: #fff;
+    }
+
+    .settings-box {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px 26px;
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .setting-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      text-align: left;
+      font-size: 14px;
+      color: #d0dce8;
+    }
+
+    .setting-row input[type="range"] {
+      width: 100%;
+      accent-color: var(--turbo);
+    }
+
+    #fs-toast {
+      position: fixed;
+      top: 66px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10, 15, 24, 0.92);
+      border: 1px solid rgba(0, 210, 255, 0.55);
+      color: #eef4fa;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 12px;
+      line-height: 1.35;
+      text-align: center;
+      max-width: 88vw;
+      z-index: 40;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    #save-indicator {
+      position: fixed;
+      top: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.65);
+      text-transform: uppercase;
+      opacity: 0;
+      transition: opacity 0.4s;
+      z-index: 25;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-wrap"></div>
+  <div id="turbo-vignette"></div>
+  <div id="save-indicator">Сохранено</div>
+  <div id="fs-toast"></div>
+
+  <div id="ui-layer">
+    <div class="hud" id="hud">
+      <div class="hud-item">Ур: <span id="ui-level">1</span>/10</div>
+      <div class="hud-item"><span id="ui-distance">1000</span> м</div>
+      <div class="hud-item hud-speed" id="hud-speed-box"><span id="ui-speed">0</span> км/ч</div>
+    </div>
+  </div>
+
+  <div class="top-actions" id="top-actions">
+    <button class="mini-btn" id="btn-fs">[FS]</button>
+    <button class="mini-btn" id="btn-env">Природа</button>
+    <button class="mini-btn" id="btn-gyro">Гиро: ВКЛ</button>
+    <button class="mini-btn" id="btn-pause-settings">⚙</button>
+  </div>
+
+  <div id="turbo-wrap">
+    <button id="btn-turbo">
+      <div id="turbo-bar"></div>
+      <div id="turbo-label">
+        <span id="turbo-title">ТУРБО</span>
+        <span id="turbo-sub">ГОТОВО</span>
+      </div>
+    </button>
+  </div>
+
+  <div id="landscape-controls">
+    <div class="control-group">
+      <div class="touch-btn touch-btn-brake" id="btn-brake">ТОРМ</div>
+      <div class="touch-btn touch-btn-gas" id="btn-gas">ГАЗ</div>
+    </div>
+    <div class="control-group">
+      <div class="touch-btn" id="btn-left">◀</div>
+      <div class="touch-btn" id="btn-right">▶</div>
+    </div>
+  </div>
+
+  <!-- Главное меню -->
+  <div id="start-screen" class="screen">
+    <h1>3D ГОНКА</h1>
+    <p class="hint" id="menu-hint">
+      3 полосы для обгона, 10 уровней по 1 км.<br>
+      Наклоняй телефон (или стрелки / кнопки).<br>
+      ТУРБО: ускорение на 5 сек, зарядка 15 сек.
+    </p>
+    <div class="btn-group">
+      <button class="btn continue hidden" id="btn-continue">Продолжить</button>
+      <button class="btn" id="btn-start">Новая игра</button>
+      <button class="btn secondary" id="btn-settings">Настройки</button>
+    </div>
+  </div>
+
+  <!-- Настройки -->
+  <div id="settings-screen" class="screen hidden">
+    <h1>НАСТРОЙКИ</h1>
+    <div class="settings-box">
+      <div class="setting-row">
+        <label>Чувствительность руля: <strong id="val-sens">1.0</strong>x</label>
+        <input type="range" id="rng-sens" min="0.4" max="2.5" step="0.1" value="1.0" />
+      </div>
+      <div class="setting-row">
+        <label>Чувствительность газ/тормоз: <strong id="val-pitch">1.0</strong>x</label>
+        <input type="range" id="rng-pitch" min="0.5" max="2.0" step="0.1" value="1.0" />
+      </div>
+      <button class="btn" id="btn-settings-back">Назад</button>
+    </div>
+  </div>
+
+  <!-- Авария -->
+  <div id="gameover-screen" class="screen hidden">
+    <h1 style="background: linear-gradient(45deg, #ff2a6d, #ffb800); -webkit-background-clip: text;">ДТП!</h1>
+    <p class="hint" id="gameover-info">Вы врезались в трафик.</p>
+    <div class="btn-group">
+      <button class="btn" id="btn-retry">Попробовать снова</button>
+      <button class="btn secondary" id="btn-menu">В меню</button>
+    </div>
+  </div>
+
+  <!-- Победа -->
+  <div id="win-screen" class="screen hidden">
+    <h1 style="background: linear-gradient(45deg, #ffd200, #38ef7d); -webkit-background-clip: text;">ПОБЕДА!</h1>
+    <p class="hint">Все 10 уровней пройдены!</p>
+    <div class="btn-group">
+      <button class="btn" id="btn-play-again">Играть еще раз</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      const SAVE_KEY = 'race_3lane_turbo_v1';
+      const LANES = [-2.55, 0, 2.55];
+      const ROAD_WIDTH = 7.8;
+      const TURBO_DURATION = 5.0;   // 5 секунд работы
+      const TURBO_RECHARGE = 15.0;  // 15 секунд зарядки
+
+      // --- Состояние игры ---
+      const state = {
+        mode: 'menu', // menu, playing, paused, gameover, win
+        returnFromSettings: 'menu',
+        level: 1,
+        distanceRemaining: 1000,
+        currentSpeedKmh: 0,
+        targetSpeedKmh: 0,
+        playerX: 0,
+        playerSteer: 0,
+        curCurve: 0,
+        targetCurve: 0,
+        curveTimer: 3.5,
+
+        // Турбо
+        turboState: 'ready', // ready, active, recharging
+        turboTimer: 0,       // оставшееся время (active) или накопленное (recharging)
+
+        // Управление
+        useGyro: true,
+        sensitivity: 1.0,
+        pitchSens: 1.0,
+        tilt: 0,
+        pitchVal: 0,
+        calibrated: false,
+        calBeta: 45,
+        calGamma: 0,
+        keys: { left: false, right: false, gas: false, brake: false },
+
+        // Окружение
+        envMode: 'nature',
+        isLandscape: window.innerWidth > window.innerHeight,
+        lastSaveTime: 0,
+        lastTime: 0,
+        roadOffset: 0,
+        camShake: 0,
+        suspY: 0,
+        suspVel: 0
+      };
+
+      // --- DOM ---
+      const wrap = document.getElementById('game-wrap');
+      const hud = document.getElementById('hud');
+      const uiLevel = document.getElementById('ui-level');
+      const uiDistance = document.getElementById('ui-distance');
+      const uiSpeed = document.getElementById('ui-speed');
+      const hudSpeedBox = document.getElementById('hud-speed-box');
+      const topActions = document.getElementById('top-actions');
+      const btnFs = document.getElementById('btn-fs');
+      const btnEnv = document.getElementById('btn-env');
+      const btnGyro = document.getElementById('btn-gyro');
+      const btnPauseSettings = document.getElementById('btn-pause-settings');
+      const turboWrap = document.getElementById('turbo-wrap');
+      const btnTurbo = document.getElementById('btn-turbo');
+      const turboBar = document.getElementById('turbo-bar');
+      const turboTitle = document.getElementById('turbo-title');
+      const turboSub = document.getElementById('turbo-sub');
+      const turboVignette = document.getElementById('turbo-vignette');
+      const landscapeControls = document.getElementById('landscape-controls');
+      const saveIndicator = document.getElementById('save-indicator');
+
+      const startScreen = document.getElementById('start-screen');
+      const settingsScreen = document.getElementById('settings-screen');
+      const gameoverScreen = document.getElementById('gameover-screen');
+      const winScreen = document.getElementById('win-screen');
+      const btnContinue = document.getElementById('btn-continue');
+      const rngSens = document.getElementById('rng-sens');
+      const valSens = document.getElementById('val-sens');
+      const rngPitch = document.getElementById('rng-pitch');
+      const valPitch = document.getElementById('val-pitch');
+
+      // --- Реалистичный звук (Web Audio API: двигатель с передачами, торможение, турбо, ДТП) ---
+      let audioCtx = null, masterComp = null, noiseBuffer = null;
+      let engOsc1 = null, engOsc2 = null, engSub = null, engNoise = null, engNoiseFilter = null;
+      let engFilter = null, engGain = null;
+      let turboOsc = null, turboGain = null;
+      let brakeNoise = null, brakeFilter = null, brakeGain = null, brakeSquealOsc = null, brakeSquealGain = null;
+      let lastGear = 1;
+
+      function createNoiseBuffer(ctx) {
+        const len = ctx.sampleRate * 2;
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+        return buf;
+      }
+
+      function makeDistortionCurve(amount) {
+        const n = 256, curve = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+          const x = (i * 2) / n - 1;
+          curve[i] = ((3 + amount) * x * 20 * (Math.PI / 180)) / (Math.PI + amount * Math.abs(x));
+        }
+        return curve;
+      }
+
+      function initAudio() {
+        if (audioCtx) return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        audioCtx = new AC();
+        noiseBuffer = createNoiseBuffer(audioCtx);
+
+        masterComp = audioCtx.createDynamicsCompressor();
+        masterComp.threshold.value = -14;
+        masterComp.ratio.value = 4;
+        masterComp.connect(audioCtx.destination);
+
+        // --- Двигатель (2 осциллятора + саб + выхлопной шум + мягкий перегруз) ---
+        engOsc1 = audioCtx.createOscillator(); engOsc1.type = 'sawtooth';
+        engOsc2 = audioCtx.createOscillator(); engOsc2.type = 'sawtooth';
+        engSub = audioCtx.createOscillator(); engSub.type = 'triangle';
+
+        const shaper = audioCtx.createWaveShaper();
+        shaper.curve = makeDistortionCurve(18);
+        shaper.oversample = '2x';
+
+        engFilter = audioCtx.createBiquadFilter();
+        engFilter.type = 'lowpass';
+        engFilter.Q.value = 2.4;
+
+        engGain = audioCtx.createGain();
+        engGain.gain.value = 0;
+
+        engNoise = audioCtx.createBufferSource();
+        engNoise.buffer = noiseBuffer;
+        engNoise.loop = true;
+        engNoiseFilter = audioCtx.createBiquadFilter();
+        engNoiseFilter.type = 'bandpass';
+        engNoiseFilter.frequency.value = 180;
+        engNoiseFilter.Q.value = 1.2;
+        const engNoiseGain = audioCtx.createGain();
+        engNoiseGain.gain.value = 0.28;
+
+        engOsc1.connect(shaper);
+        engOsc2.connect(shaper);
+        engSub.connect(engFilter);
+        shaper.connect(engFilter);
+        engNoise.connect(engNoiseFilter);
+        engNoiseFilter.connect(engNoiseGain);
+        engNoiseGain.connect(engFilter);
+
+        engFilter.connect(engGain);
+        engGain.connect(masterComp);
+
+        // --- Турбина ---
+        turboOsc = audioCtx.createOscillator(); turboOsc.type = 'sine';
+        turboGain = audioCtx.createGain(); turboGain.gain.value = 0;
+        turboOsc.connect(turboGain);
+        turboGain.connect(masterComp);
+
+        // --- Торможение (визг шин + шипение) ---
+        brakeNoise = audioCtx.createBufferSource();
+        brakeNoise.buffer = noiseBuffer;
+        brakeNoise.loop = true;
+        brakeFilter = audioCtx.createBiquadFilter();
+        brakeFilter.type = 'bandpass';
+        brakeFilter.frequency.value = 1650;
+        brakeFilter.Q.value = 6.5;
+        brakeGain = audioCtx.createGain();
+        brakeGain.gain.value = 0;
+        brakeNoise.connect(brakeFilter);
+        brakeFilter.connect(brakeGain);
+        brakeGain.connect(masterComp);
+
+        brakeSquealOsc = audioCtx.createOscillator();
+        brakeSquealOsc.type = 'triangle';
+        brakeSquealOsc.frequency.value = 1850;
+        brakeSquealGain = audioCtx.createGain();
+        brakeSquealGain.gain.value = 0;
+        brakeSquealOsc.connect(brakeSquealGain);
+        brakeSquealGain.connect(masterComp);
+
+        engOsc1.start(); engOsc2.start(); engSub.start(); engNoise.start();
+        turboOsc.start(); brakeNoise.start(); brakeSquealOsc.start();
+      }
+
+      function playBlowOffSound() {
+        if (!audioCtx || audioCtx.state !== 'running') return;
+        const now = audioCtx.currentTime;
+        const src = audioCtx.createBufferSource();
+        src.buffer = noiseBuffer;
+        const flt = audioCtx.createBiquadFilter();
+        flt.type = 'bandpass';
+        flt.frequency.setValueAtTime(3200, now);
+        flt.frequency.exponentialRampToValueAtTime(900, now + 0.28);
+        flt.Q.value = 2.5;
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0.22, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        src.connect(flt); flt.connect(g); g.connect(masterComp);
+        src.start(now); src.stop(now + 0.32);
+      }
+
+      function updateAudio(speedKmh, level, isGas, isTurbo, isBrake) {
+        if (!audioCtx || audioCtx.state !== 'running' || !engOsc1) return;
+        const now = audioCtx.currentTime;
+        const playing = state.mode === 'playing';
+
+        // Расчёт «передачи» (1..6) для реалистичного звука набора оборотов
+        const gearThresholds = [0, 38, 72, 110, 148, 188, 300];
+        let gear = 1;
+        for (let g = 1; g <= 6; g++) {
+          if (speedKmh >= gearThresholds[g - 1]) gear = g;
+        }
+        const gMin = gearThresholds[gear - 1];
+        const gMax = gearThresholds[gear];
+        const gearNorm = Math.max(0, Math.min(1, (speedKmh - gMin) / Math.max(1, gMax - gMin)));
+
+        // Обороты в пределах передачи (1500..6800 RPM -> частота 36..135 Гц)
+        const rpmFreq = 36 + gearNorm * 68 + (gear * 4.5) + (isGas ? 10 : 0) + (isTurbo ? 24 : 0);
+        const lag = gear !== lastGear ? 0.04 : 0.08;
+        lastGear = gear;
+
+        engOsc1.frequency.setTargetAtTime(rpmFreq, now, lag);
+        engOsc2.frequency.setTargetAtTime(rpmFreq * 1.505, now, lag); // 5-я гармоника + лёгкая расстройка
+        engSub.frequency.setTargetAtTime(rpmFreq * 0.5, now, lag);
+        engNoiseFilter.frequency.setTargetAtTime(140 + rpmFreq * 2.5, now, 0.09);
+
+        const cutoff = 220 + gearNorm * 650 + (isGas ? 350 : 0) + (isTurbo ? 950 : 0);
+        engFilter.frequency.setTargetAtTime(cutoff, now, 0.08);
+
+        const vol = playing ? Math.min(0.28, 0.07 + gearNorm * 0.12 + (isGas ? 0.04 : 0) + (isTurbo ? 0.05 : 0)) : 0;
+        engGain.gain.setTargetAtTime(vol, now, 0.08);
+
+        // Турбина
+        turboOsc.frequency.setTargetAtTime(isTurbo ? 580 + speedKmh * 3.1 : 220, now, 0.12);
+        turboGain.gain.setTargetAtTime(isTurbo && playing ? 0.06 : 0, now, 0.1);
+
+        // Торможение (визг шин при торможении на скорости > 28 км/ч)
+        const brakingActive = playing && isBrake && speedKmh > 28;
+        const brakeIntensity = brakingActive ? Math.min(1, (speedKmh - 25) / 110) : 0;
+        brakeFilter.frequency.setTargetAtTime(1450 + brakeIntensity * 650, now, 0.06);
+        brakeGain.gain.setTargetAtTime(brakeIntensity * 0.24, now, 0.05);
+        brakeSquealOsc.frequency.setTargetAtTime(1750 + Math.sin(now * 28) * 90 + brakeIntensity * 220, now, 0.04);
+        brakeSquealGain.gain.setTargetAtTime(brakeIntensity * 0.035, now, 0.05);
+      }
+
+      function playCrashSound() {
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+
+        // 1. Мощный глухой удар кузова (sub-thump)
+        const thump = audioCtx.createOscillator();
+        const thumpGain = audioCtx.createGain();
+        thump.type = 'sine';
+        thump.frequency.setValueAtTime(115, now);
+        thump.frequency.exponentialRampToValueAtTime(24, now + 0.38);
+        thumpGain.gain.setValueAtTime(0.75, now);
+        thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+        thump.connect(thumpGain); thumpGain.connect(masterComp);
+        thump.start(now); thump.stop(now + 0.44);
+
+        // 2. Металлический скрежет / сминание
+        const crunch = audioCtx.createBufferSource();
+        crunch.buffer = noiseBuffer;
+        const crunchFlt = audioCtx.createBiquadFilter();
+        crunchFlt.type = 'bandpass';
+        crunchFlt.frequency.setValueAtTime(900, now);
+        crunchFlt.frequency.exponentialRampToValueAtTime(260, now + 0.55);
+        crunchFlt.Q.value = 1.4;
+        const crunchGain = audioCtx.createGain();
+        crunchGain.gain.setValueAtTime(0.65, now);
+        crunchGain.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
+        crunch.connect(crunchFlt); crunchFlt.connect(crunchGain); crunchGain.connect(masterComp);
+        crunch.start(now); crunch.stop(now + 0.6);
+
+        // 3. Звон стекла / пластика
+        const glass = audioCtx.createBufferSource();
+        glass.buffer = noiseBuffer;
+        const glassFlt = audioCtx.createBiquadFilter();
+        glassFlt.type = 'highpass';
+        glassFlt.frequency.value = 3400;
+        const glassGain = audioCtx.createGain();
+        glassGain.gain.setValueAtTime(0.32, now + 0.03);
+        glassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
+        glass.connect(glassFlt); glassFlt.connect(glassGain); glassGain.connect(masterComp);
+        glass.start(now + 0.03); glass.stop(now + 0.5);
+      }
+
+      // --- Three.js объекты ---
+      let scene, camera, renderer, envRT;
+      let worldGroup, carRoot, carBodyGroup, tailLightMat, brakeLightGlow, horizonBillboard;
+      let playerWheels = [];
+      let turboFlames = [];
+      let roadGeo, roadBaseX, sideLeftGeo, sideLeftBaseX, sideRightGeo, sideRightBaseX;
+      let roadTexture, grassTexL, grassTexR, sidewalkTexL, sidewalkTexR, sideLeftMat, sideRightMat;
+      let natureGroup, cityGroup;
+      let natureProps = [], cityProps = [], poles = [];
+      let poleLightA, poleLightB;
+      let trafficCars = [];
+      let sharedTrafficLowerGeo, sharedTrafficCabinGeo, sharedTrafficRoofGeo, sharedTrafficTireGeo, sharedTrafficRimGeo;
+      const PROP_SPAN = 120;
+      const POLE_SPACING = 18;
+      let lastAppliedCurvature = null;
+
+      function getRoadCurveX(z, curvature) {
+        return curvature * z * z;
+      }
+
+      function getRoadTangentAngle(z, curvature) {
+        return Math.atan(2 * curvature * z);
+      }
+
+      function buildProceduralEnvMap(r) {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        const sky = ctx.createLinearGradient(0, 0, 0, 256);
+        sky.addColorStop(0.0, '#090d18');
+        sky.addColorStop(0.32, '#141e33');
+        sky.addColorStop(0.47, '#ffe7c2');
+        sky.addColorStop(0.51, '#ffffff');
+        sky.addColorStop(0.55, '#4c3e30');
+        sky.addColorStop(0.70, '#0a0e16');
+        sky.addColorStop(1.0, '#05070b');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, 512, 256);
+        ctx.fillStyle = 'rgba(220, 235, 255, 0.72)';
+        ctx.fillRect(40, 26, 432, 10);
+        ctx.fillStyle = 'rgba(255, 230, 185, 0.55)';
+        ctx.fillRect(90, 62, 332, 8);
+        const tex = new THREE.CanvasTexture(c);
+        tex.mapping = THREE.EquirectangularReflectionMapping;
+        tex.encoding = THREE.sRGBEncoding;
+        const pmrem = new THREE.PMREMGenerator(r);
+        pmrem.compileEquirectangularShader();
+        const rt = pmrem.fromEquirectangular(tex);
+        tex.dispose();
+        pmrem.dispose();
+        return rt;
+      }
+
+      // Текстура дороги на 3 ПОЛОСЫ (две прерывистые линии + две сплошные обочины)
+      function createRoadTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 512;
+        const ctx = c.getContext('2d');
+
+        const grad = ctx.createLinearGradient(0, 0, 512, 0);
+        grad.addColorStop(0.0, '#070a12');
+        grad.addColorStop(0.08, '#0f1628');
+        grad.addColorStop(0.5, '#18233d');
+        grad.addColorStop(0.92, '#0f1628');
+        grad.addColorStop(1.0, '#070a12');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 512, 512);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        for (let i = 0; i < 800; i++) {
+          ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 5);
+        }
+
+        // Крайние сплошные линии
+        ctx.fillStyle = 'rgba(205, 230, 255, 0.65)';
+        ctx.fillRect(12, 0, 7, 512);
+        ctx.fillRect(493, 0, 7, 512);
+
+        // Две прерывистые линии (делят дорогу на 3 полосы)
+        ctx.fillStyle = 'rgba(210, 232, 255, 0.45)';
+        const laneDiv1 = Math.round(512 / 3) - 3;
+        const laneDiv2 = Math.round((512 * 2) / 3) - 3;
+        [laneDiv1, laneDiv2].forEach((xPos) => {
+          ctx.fillRect(xPos, 32, 6, 172);
+          ctx.fillRect(xPos, 288, 6, 172);
+        });
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(1, 15);
+        tex.anisotropy = 4;
+        return tex;
+      }
+
+      function createGrassTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 256;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0c1c12';
+        ctx.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 110; i++) {
+          const x = Math.random() * 256, y = Math.random() * 256, r = 10 + Math.random() * 24;
+          const g = ctx.createRadialGradient(x, y, 1, x, y, r);
+          g.addColorStop(0, Math.random() > 0.5 ? 'rgba(28,72,38,0.28)' : 'rgba(12,38,22,0.35)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        }
+        for (let i = 0; i < 1200; i++) {
+          ctx.fillStyle = Math.random() > 0.45 ? 'rgba(42,102,52,0.34)' : 'rgba(18,52,28,0.45)';
+          ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 5);
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(7, 24); tex.anisotropy = 4;
+        return tex;
+      }
+
+      function createSidewalkTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 256;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#151922';
+        ctx.fillRect(0, 0, 256, 256);
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i <= 256; i += 32) {
+          ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(7, 24); tex.anisotropy = 4;
+        return tex;
+      }
+
+      function createBuildingFacadeTexture(accentHue) {
+        const c = document.createElement('canvas');
+        c.width = 128; c.height = 256;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#111622';
+        ctx.fillRect(0, 0, 128, 256);
+        for (let r = 0; r < 10; r++) {
+          for (let col = 0; col < 4; col++) {
+            const lit = Math.random();
+            ctx.fillStyle = lit > 0.4
+              ? (Math.random() > 0.35 ? 'rgba(255,220,145,0.75)' : 'rgba(140,210,255,0.65)')
+              : 'rgba(20,28,42,0.9)';
+            ctx.fillRect(10 + col * 29, 20 + r * 21, 19, 12);
+          }
+        }
+        ctx.fillStyle = accentHue;
+        ctx.fillRect(10, 236, 108, 8);
+        return new THREE.CanvasTexture(c);
+      }
+
+      function createHorizonGlowTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        const g = ctx.createRadialGradient(256, 175, 4, 256, 175, 230);
+        g.addColorStop(0.0, 'rgba(255,255,250,1.0)');
+        g.addColorStop(0.14, 'rgba(255,240,200,0.85)');
+        g.addColorStop(0.35, 'rgba(220,195,145,0.35)');
+        g.addColorStop(0.7, 'rgba(90,80,70,0.08)');
+        g.addColorStop(1.0, 'rgba(0,0,0,0.0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 512, 256);
+        return new THREE.CanvasTexture(c);
+      }
+
+      function createStreetLightPoolTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 256;
+        const ctx = c.getContext('2d');
+        const g = ctx.createRadialGradient(128, 128, 6, 128, 128, 124);
+        g.addColorStop(0.0, 'rgba(255,230,175,0.68)');
+        g.addColorStop(0.4, 'rgba(255,205,130,0.26)');
+        g.addColorStop(1.0, 'rgba(255,180,90,0.0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 256, 256);
+        return new THREE.CanvasTexture(c);
+      }
+
+      function createContactShadowTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 512;
+        const ctx = c.getContext('2d');
+        const g = ctx.createRadialGradient(128, 256, 30, 128, 256, 125);
+        g.addColorStop(0, 'rgba(0,0,0,0.92)');
+        g.addColorStop(0.62, 'rgba(0,0,0,0.55)');
+        g.addColorStop(1, 'rgba(0,0,0,0.0)');
+        ctx.scale(1, 2);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 256, 256);
+        return new THREE.CanvasTexture(c);
+      }
+
+      function createHeadlightBeamTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 512;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0, 512, 0, 0);
+        g.addColorStop(0.0, 'rgba(140,205,255,0.52)');
+        g.addColorStop(0.35, 'rgba(100,165,255,0.20)');
+        g.addColorStop(1.0, 'rgba(70,130,255,0.0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(95, 512); ctx.lineTo(161, 512); ctx.lineTo(250, 0); ctx.lineTo(6, 0);
+        ctx.closePath(); ctx.fill();
+        return new THREE.CanvasTexture(c);
+      }
+
+      function createLicensePlateTexture(mainText, region) {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 64;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#edf1f6'; ctx.fillRect(0, 0, 256, 64);
+        ctx.strokeStyle = '#111'; ctx.lineWidth = 4; ctx.strokeRect(3, 3, 250, 58);
+        ctx.fillStyle = '#111'; ctx.fillRect(184, 4, 3, 56);
+        ctx.font = 'bold 34px Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(mainText, 95, 34);
+        ctx.font = 'bold 24px Arial, sans-serif'; ctx.fillText(region, 219, 24);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(202, 41, 34, 4);
+        ctx.fillStyle = '#0039a6'; ctx.fillRect(202, 45, 34, 4);
+        ctx.fillStyle = '#d52b1e'; ctx.fillRect(202, 49, 34, 4);
+        const tex = new THREE.CanvasTexture(c);
+        tex.anisotropy = 4;
+        return tex;
+      }
+
+      // --- Геометрия референсной машины ---
+      function createLoftedGeometry(sections) {
+        const ringLen = sections[0].pts.length;
+        const positions = [];
+        const indices = [];
+        for (let s = 0; s < sections.length; s++) {
+          const sec = sections[s];
+          for (let p = 0; p < ringLen; p++) {
+            positions.push(sec.pts[p][0], sec.pts[p][1], sec.z);
+          }
+        }
+        for (let s = 0; s < sections.length - 1; s++) {
+          for (let p = 0; p < ringLen; p++) {
+            const pNext = (p + 1) % ringLen;
+            const a = s * ringLen + p, b = s * ringLen + pNext;
+            const c = (s + 1) * ringLen + pNext, d = (s + 1) * ringLen + p;
+            indices.push(a, b, c, a, c, d);
+          }
+        }
+        const fIdx = positions.length / 3;
+        let fy = 0;
+        for (let p = 0; p < ringLen; p++) fy += sections[0].pts[p][1];
+        positions.push(0, fy / ringLen, sections[0].z);
+        for (let p = 0; p < ringLen; p++) indices.push(fIdx, (p + 1) % ringLen, p);
+
+        const bIdx = positions.length / 3;
+        const bSec = sections[sections.length - 1];
+        let by = 0;
+        for (let p = 0; p < ringLen; p++) by += bSec.pts[p][1];
+        positions.push(0, by / ringLen, bSec.z);
+        const base = (sections.length - 1) * ringLen;
+        for (let p = 0; p < ringLen; p++) indices.push(bIdx, base + p, base + ((p + 1) % ringLen));
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        return geo;
+      }
+
+      function makeBodyRing(wBot, wMid, wTop, yBot, yMid, yTop, crown) {
+        return [
+          [0, yBot], [wBot, yBot + 0.03], [wMid, yMid], [wTop, yTop - 0.04],
+          [wTop * 0.55, yTop + crown * 0.7], [0, yTop + crown],
+          [-wTop * 0.55, yTop + crown * 0.7], [-wTop, yTop - 0.04], [-wMid, yMid], [-wBot, yBot + 0.03]
+        ];
+      }
+
+      function buildSharedCarGeometries() {
+        const lowerSections = [
+          { z: -2.26, pts: makeBodyRing(0.68, 0.74, 0.62, 0.22, 0.36, 0.50, 0.04) },
+          { z: -2.02, pts: makeBodyRing(0.84, 0.92, 0.82, 0.20, 0.46, 0.66, 0.06) },
+          { z: -1.45, pts: makeBodyRing(0.88, 0.97, 0.88, 0.20, 0.54, 0.78, 0.05) },
+          { z: -0.78, pts: makeBodyRing(0.85, 0.93, 0.85, 0.20, 0.55, 0.84, 0.04) },
+          { z:  0.15, pts: makeBodyRing(0.86, 0.94, 0.86, 0.20, 0.56, 0.86, 0.04) },
+          { z:  1.05, pts: makeBodyRing(0.92, 1.03, 0.93, 0.21, 0.60, 0.92, 0.06) },
+          { z:  1.72, pts: makeBodyRing(0.90, 1.01, 0.90, 0.24, 0.60, 0.89, 0.05) },
+          { z:  2.14, pts: makeBodyRing(0.80, 0.91, 0.82, 0.28, 0.58, 0.83, 0.03) },
+          { z:  2.26, pts: makeBodyRing(0.72, 0.82, 0.74, 0.30, 0.54, 0.78, 0.02) }
+        ];
+        const cabinSections = [
+          { z: -0.96, pts: makeBodyRing(0.78, 0.78, 0.72, 0.80, 0.84, 0.86, 0.02) },
+          { z: -0.42, pts: makeBodyRing(0.78, 0.74, 0.63, 0.82, 1.04, 1.24, 0.06) },
+          { z:  0.12, pts: makeBodyRing(0.79, 0.74, 0.62, 0.84, 1.08, 1.32, 0.07) },
+          { z:  0.72, pts: makeBodyRing(0.80, 0.73, 0.59, 0.85, 1.05, 1.26, 0.06) },
+          { z:  1.38, pts: makeBodyRing(0.80, 0.74, 0.60, 0.86, 0.98, 1.08, 0.04) },
+          { z:  1.92, pts: makeBodyRing(0.74, 0.70, 0.58, 0.84, 0.88, 0.91, 0.02) }
+        ];
+        const roofSections = [
+          { z: -0.38, pts: makeBodyRing(0.58, 0.59, 0.55, 1.24, 1.26, 1.28, 0.05) },
+          { z:  0.12, pts: makeBodyRing(0.57, 0.58, 0.54, 1.31, 1.33, 1.35, 0.06) },
+          { z:  0.68, pts: makeBodyRing(0.54, 0.55, 0.50, 1.26, 1.28, 1.29, 0.05) }
+        ];
+        sharedTrafficLowerGeo = createLoftedGeometry(lowerSections);
+        sharedTrafficCabinGeo = createLoftedGeometry(cabinSections);
+        sharedTrafficRoofGeo = createLoftedGeometry(roofSections);
+        sharedTrafficTireGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.27, 18);
+        sharedTrafficTireGeo.rotateZ(Math.PI / 2);
+        sharedTrafficRimGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.285, 14);
+        sharedTrafficRimGeo.rotateZ(Math.PI / 2);
+      }
+
+      function buildPlayerCarModel() {
+        carRoot = new THREE.Group();
+        carBodyGroup = new THREE.Group();
+        carRoot.add(carBodyGroup);
+
+        const paintMat = new THREE.MeshPhysicalMaterial({
+          color: 0x1b2230, metalness: 0.78, roughness: 0.16,
+          clearcoat: 1.0, clearcoatRoughness: 0.06, envMapIntensity: 1.55
+        });
+        const glassMat = new THREE.MeshPhysicalMaterial({
+          color: 0x050810, metalness: 0.92, roughness: 0.04,
+          clearcoat: 1.0, clearcoatRoughness: 0.03, envMapIntensity: 1.9
+        });
+        const carbonMat = new THREE.MeshStandardMaterial({ color: 0x0b0e14, metalness: 0.4, roughness: 0.45 });
+        const darkWellMat = new THREE.MeshStandardMaterial({ color: 0x040507, roughness: 0.95, metalness: 0.05 });
+        const chromeMat = new THREE.MeshStandardMaterial({ color: 0xe6eef8, metalness: 0.96, roughness: 0.1, envMapIntensity: 1.6 });
+        const caliperMat = new THREE.MeshStandardMaterial({ color: 0xf01e3c, metalness: 0.35, roughness: 0.3 });
+        const rotorMat = new THREE.MeshStandardMaterial({ color: 0x8e99a8, metalness: 0.85, roughness: 0.32 });
+
+        carBodyGroup.add(new THREE.Mesh(sharedTrafficLowerGeo, paintMat));
+        carBodyGroup.add(new THREE.Mesh(sharedTrafficCabinGeo, glassMat));
+        carBodyGroup.add(new THREE.Mesh(sharedTrafficRoofGeo, paintMat));
+
+        const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.045, 0.22), paintMat);
+        spoiler.position.set(0, 0.88, 2.08);
+        spoiler.rotation.x = 0.22;
+        carBodyGroup.add(spoiler);
+
+        const louvreGeo = new THREE.BoxGeometry(0.026, 0.022, 0.36);
+        for (let i = -7; i <= 7; i++) {
+          const slat = new THREE.Mesh(louvreGeo, i === 0 ? chromeMat : carbonMat);
+          slat.position.set(i * 0.068, 1.01, 1.56);
+          slat.rotation.x = 0.34;
+          carBodyGroup.add(slat);
+        }
+
+        const tailHousing = new THREE.Mesh(new THREE.BoxGeometry(1.76, 0.11, 0.06), carbonMat);
+        tailHousing.position.set(0, 0.74, 2.21);
+        carBodyGroup.add(tailHousing);
+
+        tailLightMat = new THREE.MeshBasicMaterial({ color: 0xff2266 });
+        const tailBar = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.042, 0.05), tailLightMat);
+        tailBar.position.set(0, 0.75, 2.24);
+        carBodyGroup.add(tailBar);
+
+        const glowCanvas = document.createElement('canvas');
+        glowCanvas.width = 256; glowCanvas.height = 64;
+        const gctx = glowCanvas.getContext('2d');
+        const gg = gctx.createRadialGradient(128, 32, 4, 128, 32, 120);
+        gg.addColorStop(0, 'rgba(255,30,105,0.9)');
+        gg.addColorStop(0.5, 'rgba(255,20,80,0.28)');
+        gg.addColorStop(1, 'rgba(255,0,60,0)');
+        gctx.fillStyle = gg; gctx.fillRect(0, 0, 256, 64);
+
+        brakeLightGlow = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.25, 0.36),
+          new THREE.MeshBasicMaterial({
+            map: new THREE.CanvasTexture(glowCanvas),
+            transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+          })
+        );
+        brakeLightGlow.position.set(0, 0.75, 2.28);
+        carBodyGroup.add(brakeLightGlow);
+
+        const diffuser = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.18, 0.16), carbonMat);
+        diffuser.position.set(0, 0.31, 2.18);
+        carBodyGroup.add(diffuser);
+
+        // Выхлопные трубы + пламя ТУРБО
+        const exhaustOuterGeo = new THREE.CylinderGeometry(0.052, 0.052, 0.14, 14);
+        exhaustOuterGeo.rotateX(Math.PI / 2);
+        const exhaustInnerGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.15, 10);
+        exhaustInnerGeo.rotateX(Math.PI / 2);
+        const flameGeo = new THREE.ConeGeometry(0.065, 0.65, 10);
+        flameGeo.rotateX(Math.PI / 2);
+        const flameMat = new THREE.MeshBasicMaterial({
+          color: 0x00e5ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false
+        });
+
+        turboFlames = [];
+        [-0.62, -0.49, 0.49, 0.62].forEach((xPos) => {
+          const outer = new THREE.Mesh(exhaustOuterGeo, chromeMat);
+          outer.position.set(xPos, 0.29, 2.24);
+          carBodyGroup.add(outer);
+          const inner = new THREE.Mesh(exhaustInnerGeo, darkWellMat);
+          inner.position.set(xPos, 0.29, 2.245);
+          carBodyGroup.add(inner);
+
+          const flame = new THREE.Mesh(flameGeo, flameMat);
+          flame.position.set(xPos, 0.29, 2.62);
+          flame.visible = false;
+          carBodyGroup.add(flame);
+          turboFlames.push(flame);
+        });
+
+        const plateMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.54, 0.135),
+          new THREE.MeshBasicMaterial({ map: createLicensePlateTexture('А583ВН', '27') })
+        );
+        plateMesh.position.set(0, 0.49, 2.265);
+        carBodyGroup.add(plateMesh);
+
+        [-0.93, 0.93].forEach((xPos) => {
+          const sk = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 2.1), carbonMat);
+          sk.position.set(xPos, 0.21, -0.02);
+          carBodyGroup.add(sk);
+        });
+
+        const splitter = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.045, 0.28), carbonMat);
+        splitter.position.set(0, 0.20, -2.18);
+        carBodyGroup.add(splitter);
+
+        [-1, 1].forEach((side) => {
+          const stalk = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.035, 0.05), carbonMat);
+          stalk.position.set(side * 0.88, 0.90, -0.52);
+          stalk.rotation.z = side * 0.28;
+          carBodyGroup.add(stalk);
+          const cap = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.085, 0.12), paintMat);
+          cap.position.set(side * 0.98, 0.94, -0.54);
+          cap.rotation.y = side * -0.18;
+          carBodyGroup.add(cap);
+        });
+
+        const headMat = new THREE.MeshBasicMaterial({ color: 0xe6f6ff });
+        [-0.66, 0.66].forEach((xPos) => {
+          const hl = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.065, 0.14), headMat);
+          hl.position.set(xPos, 0.60, -2.14);
+          hl.rotation.y = xPos > 0 ? -0.32 : 0.32;
+          hl.rotation.x = 0.18;
+          carBodyGroup.add(hl);
+        });
+
+        const beamMat = new THREE.MeshBasicMaterial({
+          map: createHeadlightBeamTexture(),
+          transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.68
+        });
+        [-0.58, 0.58].forEach((xPos) => {
+          const beam = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 8.0), beamMat);
+          beam.rotation.x = -Math.PI / 2;
+          beam.position.set(xPos, 0.04, -6.0);
+          carBodyGroup.add(beam);
+        });
+
+        const tireMat = new THREE.MeshStandardMaterial({ color: 0x101216, roughness: 0.84, metalness: 0.1 });
+        const rimMat = new THREE.MeshStandardMaterial({ color: 0xd2dce8, metalness: 0.92, roughness: 0.18, envMapIntensity: 1.5 });
+        const wheelPositions = [
+          { x: -0.92, y: 0.35, z: -1.36, isFront: true },
+          { x:  0.92, y: 0.35, z: -1.36, isFront: true },
+          { x: -0.96, y: 0.37, z:  1.34, isFront: false },
+          { x:  0.96, y: 0.37, z:  1.34, isFront: false }
+        ];
+
+        playerWheels = [];
+        wheelPositions.forEach((wp) => {
+          const radius = wp.isFront ? 0.35 : 0.37;
+          const width = wp.isFront ? 0.25 : 0.31;
+          const sideSign = wp.x > 0 ? 1 : -1;
+
+          const wellGeo = new THREE.CylinderGeometry(radius + 0.018, radius + 0.018, width * 0.72, 14);
+          wellGeo.rotateZ(Math.PI / 2);
+          const well = new THREE.Mesh(wellGeo, darkWellMat);
+          well.position.set(wp.x * 0.82, wp.y + 0.015, wp.z);
+          carBodyGroup.add(well);
+
+          const pivot = new THREE.Group();
+          pivot.position.set(wp.x, wp.y, wp.z);
+          const spinGroup = new THREE.Group();
+
+          const tireGeo = new THREE.CylinderGeometry(radius, radius, width, 24);
+          tireGeo.rotateZ(Math.PI / 2);
+          spinGroup.add(new THREE.Mesh(tireGeo, tireMat));
+
+          const rimGeo = new THREE.CylinderGeometry(radius * 0.74, radius * 0.74, width + 0.012, 20);
+          rimGeo.rotateZ(Math.PI / 2);
+          spinGroup.add(new THREE.Mesh(rimGeo, rimMat));
+
+          const innerGeo = new THREE.CylinderGeometry(radius * 0.65, radius * 0.65, width + 0.018, 16);
+          innerGeo.rotateZ(Math.PI / 2);
+          spinGroup.add(new THREE.Mesh(innerGeo, darkWellMat));
+
+          const spokeGeo = new THREE.BoxGeometry(0.03, radius * 0.64, 0.026);
+          for (let s = 0; s < 5; s++) {
+            const a = (s * Math.PI * 2) / 5;
+            const sp = new THREE.Mesh(spokeGeo, rimMat);
+            sp.position.set(sideSign * (width * 0.44), Math.cos(a) * radius * 0.34, Math.sin(a) * radius * 0.34);
+            sp.rotation.x = a;
+            spinGroup.add(sp);
+          }
+
+          const rotorGeo = new THREE.CylinderGeometry(radius * 0.55, radius * 0.55, 0.04, 16);
+          rotorGeo.rotateZ(Math.PI / 2);
+          const rotor = new THREE.Mesh(rotorGeo, rotorMat);
+          rotor.position.set(sideSign * (width * 0.12), 0, 0);
+          spinGroup.add(rotor);
+
+          pivot.add(spinGroup);
+          const caliper = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.17, 0.13), caliperMat);
+          caliper.position.set(sideSign * (width * 0.22), 0.05, wp.isFront ? 0.15 : -0.15);
+          pivot.add(caliper);
+
+          carRoot.add(pivot);
+          playerWheels.push({ pivot, spinMesh: spinGroup, isFront: wp.isFront, radius });
+        });
+
+        const shadowPlane = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.85, 5.25),
+          new THREE.MeshBasicMaterial({ map: createContactShadowTexture(), transparent: true, depthWrite: false })
+        );
+        shadowPlane.rotation.x = -Math.PI / 2;
+        shadowPlane.position.set(0, 0.02, 0);
+        carRoot.add(shadowPlane);
+
+        return carRoot;
+      }
+
+      // --- Машины трафика (на базе референсного кузова, оптимизировано) ---
+      const trafficPalette = [0xc0392b, 0x2980b9, 0xf39c12, 0xdfe6e9, 0x8e44ad, 0x16a085, 0xd35400];
+      const trafficGlassMat = new THREE.MeshPhysicalMaterial({ color: 0x060a14, metalness: 0.9, roughness: 0.08 });
+      const trafficTireMat = new THREE.MeshStandardMaterial({ color: 0x111318, roughness: 0.85 });
+      const trafficRimMat = new THREE.MeshStandardMaterial({ color: 0xc2ccd8, metalness: 0.85, roughness: 0.25 });
+      const trafficTailMat = new THREE.MeshBasicMaterial({ color: 0xff1e42 });
+      const trafficHeadMat = new THREE.MeshBasicMaterial({ color: 0xeaf6ff });
+      let sharedShadowMat = null;
+
+      function createTrafficCarMesh(colorHex) {
+        const g = new THREE.Group();
+        const bodyMat = new THREE.MeshPhysicalMaterial({
+          color: colorHex, metalness: 0.65, roughness: 0.22,
+          clearcoat: 0.9, clearcoatRoughness: 0.1, envMapIntensity: 1.3
+        });
+
+        g.add(new THREE.Mesh(sharedTrafficLowerGeo, bodyMat));
+        g.add(new THREE.Mesh(sharedTrafficCabinGeo, trafficGlassMat));
+        g.add(new THREE.Mesh(sharedTrafficRoofGeo, bodyMat));
+
+        const tailBar = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.06, 0.06), trafficTailMat);
+        tailBar.position.set(0, 0.74, 2.23);
+        g.add(tailBar);
+
+        [-0.65, 0.65].forEach((xPos) => {
+          const hl = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.06, 0.1), trafficHeadMat);
+          hl.position.set(xPos, 0.58, -2.14);
+          g.add(hl);
+        });
+
+        const wheelCoords = [
+          [-0.92, 0.36, -1.35], [0.92, 0.36, -1.35],
+          [-0.95, 0.36,  1.34], [0.95, 0.36,  1.34]
+        ];
+        const wMeshes = [];
+        wheelCoords.forEach(([x, y, z]) => {
+          const wg = new THREE.Group();
+          wg.position.set(x, y, z);
+          wg.add(new THREE.Mesh(sharedTrafficTireGeo, trafficTireMat));
+          wg.add(new THREE.Mesh(sharedTrafficRimGeo, trafficRimMat));
+          g.add(wg);
+          wMeshes.push(wg);
+        });
+
+        if (!sharedShadowMat) {
+          sharedShadowMat = new THREE.MeshBasicMaterial({
+            map: createContactShadowTexture(), transparent: true, depthWrite: false
+          });
+        }
+        const sh = new THREE.Mesh(new THREE.PlaneGeometry(2.75, 5.1), sharedShadowMat);
+        sh.rotation.x = -Math.PI / 2;
+        sh.position.set(0, 0.02, 0);
+        g.add(sh);
+
+        return { group: g, wheels: wMeshes };
+      }
+
+      function findSafeSpawnLane(zPos) {
+        // Не блокируем все 3 полосы рядом друг с другом
+        const busyLanes = new Set();
+        for (let i = 0; i < trafficCars.length; i++) {
+          if (Math.abs(trafficCars[i].z - zPos) < 16) {
+            busyLanes.add(trafficCars[i].laneIdx);
+          }
+        }
+        const free = [0, 1, 2].filter((idx) => !busyLanes.has(idx));
+        if (free.length === 0) return Math.floor(Math.random() * 3);
+        // Если заняты 2 полосы, оставляем 1 свободную — не спавним на последнюю
+        if (free.length === 1) return -1;
+        return free[Math.floor(Math.random() * free.length)];
+      }
+
+      function initTraffic() {
+        trafficCars.forEach((tc) => worldGroup.remove(tc.group));
+        trafficCars = [];
+        const count = Math.min(7, 3 + Math.floor(state.level * 0.4));
+        for (let i = 0; i < count; i++) {
+          const color = trafficPalette[i % trafficPalette.length];
+          const { group, wheels } = createTrafficCarMesh(color);
+          const z = -26 - i * (95 / count) - Math.random() * 6;
+          let laneIdx = findSafeSpawnLane(z);
+          if (laneIdx === -1) laneIdx = i % 3;
+          const speedKmh = 42 + Math.random() * 34 + state.level * 2;
+          group.position.set(LANES[laneIdx], 0, z);
+          worldGroup.add(group);
+          trafficCars.push({ group, wheels, laneIdx, laneX: LANES[laneIdx], z, speedKmh });
+        }
+      }
+
+      // --- Окружение (3 полосы, природа/город, фонари) ---
+      function createBendablePlane(w, l, segW, segL, cx, cz) {
+        const geo = new THREE.PlaneGeometry(w, l, segW, segL);
+        geo.rotateX(-Math.PI / 2);
+        geo.translate(cx, 0, cz);
+        const pos = geo.attributes.position;
+        const baseX = new Float32Array(pos.count);
+        for (let i = 0; i < pos.count; i++) baseX[i] = pos.getX(i);
+        return { geo, baseX };
+      }
+
+      function applyRoadBend(geo, baseX, curvature) {
+        const pos = geo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const z = pos.getZ(i);
+          pos.setX(i, baseX[i] + getRoadCurveX(z, curvature));
+        }
+        pos.needsUpdate = true;
+      }
+
+      function buildEnvironment() {
+        scene.background = new THREE.Color(0x070a0e);
+        scene.fog = new THREE.FogExp2(0x101518, 0.0135);
+
+        worldGroup = new THREE.Group();
+        scene.add(worldGroup);
+
+        roadTexture = createRoadTexture();
+        const roadData = createBendablePlane(ROAD_WIDTH, 130, 6, 64, 0, -48);
+        roadGeo = roadData.geo; roadBaseX = roadData.baseX;
+        worldGroup.add(new THREE.Mesh(roadGeo, new THREE.MeshStandardMaterial({ map: roadTexture, roughness: 0.36, metalness: 0.32 })));
+
+        grassTexL = createGrassTexture();
+        grassTexR = createGrassTexture();
+        sidewalkTexL = createSidewalkTexture();
+        sidewalkTexR = createSidewalkTexture();
+
+        sideLeftMat = new THREE.MeshStandardMaterial({ map: grassTexL, roughness: 0.92, metalness: 0.05 });
+        sideRightMat = new THREE.MeshStandardMaterial({ map: grassTexR, roughness: 0.92, metalness: 0.05 });
+
+        const sideOffset = ROAD_WIDTH / 2 + 14; // 3.9 + 14 = 17.9
+        const lData = createBendablePlane(28, 130, 4, 48, -sideOffset, -48);
+        sideLeftGeo = lData.geo; sideLeftBaseX = lData.baseX;
+        const lPlane = new THREE.Mesh(sideLeftGeo, sideLeftMat);
+        lPlane.position.y = -0.01;
+        worldGroup.add(lPlane);
+
+        const rData = createBendablePlane(28, 130, 4, 48, sideOffset, -48);
+        sideRightGeo = rData.geo; sideRightBaseX = rData.baseX;
+        const rPlane = new THREE.Mesh(sideRightGeo, sideRightMat);
+        rPlane.position.y = -0.01;
+        worldGroup.add(rPlane);
+
+        horizonBillboard = new THREE.Mesh(
+          new THREE.PlaneGeometry(140, 48),
+          new THREE.MeshBasicMaterial({
+            map: createHorizonGlowTexture(),
+            transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+          })
+        );
+        horizonBillboard.position.set(0, 10, -88);
+        worldGroup.add(horizonBillboard);
+
+        // Фонарные столбы (справа за пределами 3-й полосы)
+        const poleMat = new THREE.MeshStandardMaterial({ color: 0x313846, metalness: 0.78, roughness: 0.3 });
+        const lampHeadMat = new THREE.MeshBasicMaterial({ color: 0xffe8bc });
+        const poolMat = new THREE.MeshBasicMaterial({
+          map: createStreetLightPoolTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        const poleGeo = new THREE.CylinderGeometry(0.06, 0.09, 6.2, 8);
+        const armGeo = new THREE.BoxGeometry(1.8, 0.07, 0.07);
+        const lampGeo = new THREE.BoxGeometry(0.5, 0.06, 0.2);
+        const poolGeo = new THREE.PlaneGeometry(8.5, 9.5);
+
+        poles = [];
+        for (let i = 0; i < 6; i++) {
+          const g = new THREE.Group();
+          const zPos = 10 - i * POLE_SPACING;
+          g.position.set(4.55, 0, zPos);
+          const post = new THREE.Mesh(poleGeo, poleMat); post.position.set(0, 3.1, 0); g.add(post);
+          const arm = new THREE.Mesh(armGeo, poleMat); arm.position.set(-0.85, 6.15, 0); g.add(arm);
+          const lamp = new THREE.Mesh(lampGeo, lampHeadMat); lamp.position.set(-1.55, 6.08, 0); g.add(lamp);
+          const pool = new THREE.Mesh(poolGeo, poolMat); pool.rotation.x = -Math.PI / 2; pool.position.set(-2.3, 0.015, 0); g.add(pool);
+          worldGroup.add(g);
+          poles.push({ group: g, z: zPos });
+        }
+
+        poleLightA = new THREE.PointLight(0xffd79a, 3.6, 20, 1.4);
+        poleLightB = new THREE.PointLight(0xffd79a, 3.6, 20, 1.4);
+        worldGroup.add(poleLightA, poleLightB);
+
+        // Природа
+        natureGroup = new THREE.Group();
+        worldGroup.add(natureGroup);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3b281c, roughness: 0.9 });
+        const pineMat1 = new THREE.MeshStandardMaterial({ color: 0x153822, roughness: 0.85 });
+        const pineMat2 = new THREE.MeshStandardMaterial({ color: 0x1d4a2c, roughness: 0.85 });
+        const bushMat = new THREE.MeshStandardMaterial({ color: 0x1e522e, roughness: 0.88 });
+        const trunkGeo = new THREE.CylinderGeometry(0.14, 0.22, 1.4, 6);
+        const c1Geo = new THREE.ConeGeometry(1.35, 2.6, 7);
+        const c2Geo = new THREE.ConeGeometry(1.05, 2.2, 7);
+        const c3Geo = new THREE.ConeGeometry(0.7, 1.7, 7);
+        const bushGeo = new THREE.DodecahedronGeometry(0.7, 0);
+
+        natureProps = [];
+        for (let i = 0; i < 42; i++) {
+          const side = i % 2 === 0 ? -1 : 1;
+          const zPos = 14 - (i / 42) * PROP_SPAN - Math.random() * 2;
+          const baseX = side * (6.2 + Math.random() * 11.5);
+          const g = new THREE.Group();
+          if (Math.random() < 0.7) {
+            const sc = 0.8 + Math.random() * 0.7;
+            const tr = new THREE.Mesh(trunkGeo, trunkMat); tr.position.y = 0.7; g.add(tr);
+            const m = Math.random() > 0.5 ? pineMat1 : pineMat2;
+            const k1 = new THREE.Mesh(c1Geo, m); k1.position.y = 2.1; g.add(k1);
+            const k2 = new THREE.Mesh(c2Geo, m); k2.position.y = 3.5; g.add(k2);
+            const k3 = new THREE.Mesh(c3Geo, m); k3.position.y = 4.7; g.add(k3);
+            g.scale.setScalar(sc);
+          } else {
+            const b = new THREE.Mesh(bushGeo, bushMat);
+            const sx = 0.9 + Math.random() * 0.8, sy = 0.6 + Math.random() * 0.5;
+            b.scale.set(sx, sy, sx); b.position.y = sy * 0.45; g.add(b);
+          }
+          g.position.set(baseX, 0, zPos);
+          natureGroup.add(g);
+          natureProps.push({ group: g, baseX, z: zPos });
+        }
+
+        // Город
+        cityGroup = new THREE.Group();
+        cityGroup.visible = false;
+        worldGroup.add(cityGroup);
+        const neonColors = ['#00d2ff', '#ff2a6d', '#ffb800', '#19e68c', '#b45cff'];
+        const facadeMats = neonColors.map((col) => {
+          const t = createBuildingFacadeTexture(col);
+          return new THREE.MeshStandardMaterial({
+            map: t, roughness: 0.55, metalness: 0.25,
+            emissive: new THREE.Color(0xffffff), emissiveMap: t, emissiveIntensity: 0.65
+          });
+        });
+        const roofMat = new THREE.MeshStandardMaterial({ color: 0x0b0e16, roughness: 0.8 });
+
+        cityProps = [];
+        for (let i = 0; i < 26; i++) {
+          const side = i % 2 === 0 ? -1 : 1;
+          const zPos = 14 - (i / 26) * PROP_SPAN;
+          const w = 3.8 + Math.random() * 3.2, d = 4.4 + Math.random() * 3.6, h = 7.5 + Math.random() * 14;
+          const baseX = side * (6.8 + w * 0.5 + Math.random() * 2.2);
+          const fm = facadeMats[i % facadeMats.length];
+          const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [fm, fm, roofMat, roofMat, fm, fm]);
+          mesh.position.y = h * 0.5;
+          const g = new THREE.Group(); g.add(mesh); g.position.set(baseX, 0, zPos);
+          cityGroup.add(g);
+          cityProps.push({ group: g, baseX, z: zPos });
+        }
+
+        scene.add(new THREE.AmbientLight(0xdce6ff, 0.58));
+        const sunLight = new THREE.DirectionalLight(0xffe7c2, 1.5);
+        sunLight.position.set(0, 11, -30);
+        scene.add(sunLight);
+        const rimLight = new THREE.DirectionalLight(0x9ab8ff, 0.8);
+        rimLight.position.set(-4, 8, 14);
+        scene.add(rimLight);
+      }
+
+      function setEnvMode(mode) {
+        state.envMode = mode === 'city' ? 'city' : 'nature';
+        const isCity = state.envMode === 'city';
+        natureGroup.visible = !isCity;
+        cityGroup.visible = isCity;
+        sideLeftMat.map = isCity ? sidewalkTexL : grassTexL;
+        sideRightMat.map = isCity ? sidewalkTexR : grassTexR;
+        sideLeftMat.roughness = isCity ? 0.55 : 0.92;
+        sideRightMat.roughness = isCity ? 0.55 : 0.92;
+        sideLeftMat.needsUpdate = true;
+        sideRightMat.needsUpdate = true;
+        btnEnv.textContent = isCity ? 'Город' : 'Природа';
+      }
+
+      // --- Турбо механика (5с работа / 15с зарядка) ---
+      function activateTurbo() {
+        if (state.mode !== 'playing' || state.turboState !== 'ready') return;
+        state.turboState = 'active';
+        state.turboTimer = TURBO_DURATION;
+        state.camShake = 0.65;
+        updateTurboUI();
+      }
+
+      function updateTurbo(dt) {
+        if (state.turboState === 'active') {
+          state.turboTimer -= dt;
+          if (state.turboTimer <= 0) {
+            state.turboState = 'recharging';
+            state.turboTimer = 0;
+            playBlowOffSound();
+          }
+        } else if (state.turboState === 'recharging') {
+          state.turboTimer += dt;
+          if (state.turboTimer >= TURBO_RECHARGE) {
+            state.turboState = 'ready';
+            state.turboTimer = 0;
+          }
+        }
+        updateTurboUI();
+      }
+
+      function updateTurboUI() {
+        const isActive = state.turboState === 'active';
+        const isRecharging = state.turboState === 'recharging';
+        btnTurbo.classList.toggle('active', isActive);
+        btnTurbo.classList.toggle('recharging', isRecharging);
+        btnTurbo.disabled = isRecharging;
+        turboVignette.classList.toggle('active', isActive && state.mode === 'playing');
+        hudSpeedBox.classList.toggle('turbo', isActive);
+
+        if (isActive) {
+          const pct = Math.max(0, (state.turboTimer / TURBO_DURATION) * 100);
+          turboBar.style.width = pct.toFixed(1) + '%';
+          turboTitle.textContent = 'ТУРБО!';
+          turboSub.textContent = state.turboTimer.toFixed(1) + ' С';
+        } else if (isRecharging) {
+          const pct = Math.min(100, (state.turboTimer / TURBO_RECHARGE) * 100);
+          const rem = Math.max(0, TURBO_RECHARGE - state.turboTimer);
+          turboBar.style.width = pct.toFixed(1) + '%';
+          turboTitle.textContent = 'ЗАРЯД';
+          turboSub.textContent = Math.ceil(rem) + ' С';
+        } else {
+          turboBar.style.width = '100%';
+          turboTitle.textContent = 'ТУРБО';
+          turboSub.textContent = 'ГОТОВО';
+        }
+      }
+
+      // --- Сохранение ---
+      function saveGame() {
+        try {
+          localStorage.setItem(SAVE_KEY, JSON.stringify({
+            level: state.level,
+            distanceRemaining: state.distanceRemaining,
+            currentSpeedKmh: state.currentSpeedKmh,
+            playerX: state.playerX,
+            turboState: state.turboState,
+            turboTimer: state.turboTimer,
+            envMode: state.envMode,
+            sensitivity: state.sensitivity,
+            pitchSens: state.pitchSens
+          }));
+          saveIndicator.style.opacity = '1';
+          setTimeout(() => { saveIndicator.style.opacity = '0'; }, 900);
+        } catch (e) {}
+      }
+
+      function loadGame() {
+        try {
+          const raw = localStorage.getItem(SAVE_KEY);
+          if (!raw) return false;
+          const d = JSON.parse(raw);
+          state.level = d.level || 1;
+          state.distanceRemaining = typeof d.distanceRemaining === 'number' ? d.distanceRemaining : 1000;
+          state.currentSpeedKmh = d.currentSpeedKmh || 0;
+          state.playerX = d.playerX || 0;
+          state.turboState = d.turboState || 'ready';
+          state.turboTimer = d.turboTimer || 0;
+          if (d.envMode) setEnvMode(d.envMode);
+          if (d.sensitivity) { state.sensitivity = d.sensitivity; rngSens.value = d.sensitivity; valSens.textContent = d.sensitivity.toFixed(1); }
+          if (d.pitchSens) { state.pitchSens = d.pitchSens; rngPitch.value = d.pitchSens; valPitch.textContent = d.pitchSens.toFixed(1); }
+          return true;
+        } catch (e) { return false; }
+      }
+
+      function clearSave() {
+        try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+      }
+
+      // --- Гироскоп и управление ---
+      function handleOrientation(e) {
+        if (!state.useGyro || state.mode !== 'playing') return;
+        const b = e.beta, g = e.gamma;
+        if (b === null || g === null) return;
+
+        let orient = 0;
+        if (screen.orientation && typeof screen.orientation.angle === 'number') orient = screen.orientation.angle;
+        else if (typeof window.orientation === 'number') orient = window.orientation;
+
+        let roll = 0, pitch = 0;
+        if (orient === 90) { roll = b; pitch = -g; }
+        else if (orient === -90 || orient === 270) { roll = -b; pitch = g; }
+        else { roll = g; pitch = b; }
+
+        if (!state.calibrated) {
+          state.calGamma = roll;
+          state.calBeta = pitch;
+          state.calibrated = true;
+        }
+
+        const rawRoll = (roll - state.calGamma * 0.25) / 26;
+        state.tilt = Math.max(-1, Math.min(1, rawRoll * state.sensitivity));
+
+        const basePitch = state.isLandscape ? state.calBeta : 45;
+        const delta = (pitch - basePitch) * state.pitchSens;
+        if (delta < -14) state.pitchVal = 1;
+        else if (delta > 14) state.pitchVal = -1;
+        else state.pitchVal = 0;
+      }
+
+      function resetKeys() {
+        state.keys = { left: false, right: false, gas: false, brake: false };
+        document.querySelectorAll('.touch-btn').forEach((b) => b.classList.remove('active'));
+      }
+
+      function syncGyroUI() {
+        btnGyro.textContent = state.useGyro ? 'Гиро: ВКЛ' : 'Гиро: ВЫКЛ';
+        btnGyro.style.borderColor = state.useGyro ? 'rgba(56,239,125,0.65)' : 'rgba(255,42,109,0.65)';
+        landscapeControls.style.opacity = state.useGyro ? '0.35' : '1';
+      }
+
+      function updateLayoutUI() {
+        state.isLandscape = window.innerWidth > window.innerHeight;
+        const playing = state.mode === 'playing';
+        hud.style.display = playing ? 'flex' : 'none';
+        topActions.style.display = playing ? 'flex' : 'none';
+        turboWrap.style.display = playing ? 'block' : 'none';
+        landscapeControls.style.display = (playing && state.isLandscape) ? 'flex' : 'none';
+        btnGyro.style.display = state.isLandscape ? 'block' : 'none';
+        if (!state.isLandscape) state.useGyro = true;
+        syncGyroUI();
+      }
+
+      function isFullscreenActive() {
+        return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+      }
+
+      function syncFsBtn() {
+        if (!btnFs) return;
+        const active = isFullscreenActive();
+        btnFs.textContent = active ? '[✕ FS]' : '[FS]';
+        btnFs.style.borderColor = active ? 'rgba(0, 210, 255, 0.75)' : 'rgba(255, 255, 255, 0.16)';
+      }
+
+      let fsToastTimer = null;
+      function showFsToast(msg) {
+        const el = document.getElementById('fs-toast');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.opacity = '1';
+        clearTimeout(fsToastTimer);
+        fsToastTimer = setTimeout(() => { el.style.opacity = '0'; }, 4000);
+      }
+
+      function enterFullscreen(fromUserClick = false) {
+        if (isFullscreenActive()) return;
+        const el = document.documentElement;
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req) {
+          try {
+            const p = req.call(el);
+            if (p && typeof p.catch === 'function') p.catch(() => {});
+          } catch (e) {}
+        } else if (fromUserClick) {
+          showFsToast('На iPhone браузеры блокируют JS-фулскрин. Для полного экрана добавьте сайт «На экран Домой» через Safari.');
+        }
+        syncFsBtn();
+      }
+
+      function exitFullscreen() {
+        if (!isFullscreenActive()) return;
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          try { document.webkitExitFullscreen(); } catch (e) {}
+        }
+        syncFsBtn();
+      }
+
+      function toggleFullscreen() {
+        if (isFullscreenActive()) exitFullscreen();
+        else enterFullscreen(true);
+      }
+
+      document.addEventListener('fullscreenchange', syncFsBtn);
+      document.addEventListener('webkitfullscreenchange', syncFsBtn);
+
+      function handleResize() {
+        const w = window.innerWidth, h = window.innerHeight;
+        const wasLandscape = state.isLandscape;
+        if (camera && renderer) {
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h, false);
+        }
+        resetKeys();
+        state.calibrated = false;
+        updateLayoutUI();
+        // Автоматический переход в полный экран при перевороте в альбомный режим
+        if (state.isLandscape && !wasLandscape) {
+          enterFullscreen();
+        }
+        syncFsBtn();
+      }
+
+      window.addEventListener('resize', handleResize);
+      window.addEventListener('orientationchange', () => {
+        requestAnimationFrame(() => requestAnimationFrame(handleResize));
+      });
+
+      // --- Цикл физики и рендера ---
+      function updateGame(dt) {
+        if (state.mode === 'playing') {
+          updateTurbo(dt);
+
+          // Плавные повороты трассы
+          state.curveTimer -= dt;
+          if (state.curveTimer <= 0) {
+            state.targetCurve = (Math.random() - 0.5) * 0.0055;
+            if (Math.abs(state.targetCurve) < 0.001) state.targetCurve = 0;
+            state.curveTimer = 2.8 + Math.random() * 3.5;
+          }
+          state.curCurve += (state.targetCurve - state.curCurve) * Math.min(1, dt * 0.9);
+
+          // Скорость (увеличивается каждый уровень + турбо)
+          const isTurbo = state.turboState === 'active';
+          const isGas = state.keys.gas || (state.useGyro && state.pitchVal === 1);
+          const isBrake = state.keys.brake || (state.useGyro && state.pitchVal === -1);
+
+          const baseCruise = 85 + (state.level - 1) * 8;
+          if (isTurbo) {
+            state.targetSpeedKmh = baseCruise + 95;
+          } else if (isBrake) {
+            state.targetSpeedKmh = 25;
+          } else if (isGas) {
+            state.targetSpeedKmh = baseCruise + 35;
+          } else {
+            state.targetSpeedKmh = baseCruise;
+          }
+
+          const accelRate = isTurbo ? 4.8 : (isBrake ? 4.2 : 2.2);
+          state.currentSpeedKmh += (state.targetSpeedKmh - state.currentSpeedKmh) * Math.min(1, dt * accelRate);
+
+          // Руление
+          let steerInput = 0;
+          if (state.keys.left) steerInput = -1 * state.sensitivity;
+          else if (state.keys.right) steerInput = 1 * state.sensitivity;
+          else if (state.useGyro) steerInput = state.tilt;
+          steerInput = Math.max(-1, Math.min(1, steerInput));
+
+          state.playerSteer += (steerInput - state.playerSteer) * Math.min(1, dt * 9);
+          const lateralSpeed = 5.4 + (state.currentSpeedKmh / 180) * 2.4;
+          state.playerX += state.playerSteer * lateralSpeed * dt;
+          // Легкий снос в поворотах
+          state.playerX -= state.curCurve * 160 * (state.currentSpeedKmh / 140) * dt;
+          state.playerX = Math.max(-3.15, Math.min(3.15, state.playerX));
+
+          // Пройденная дистанция (м)
+          const speedMs = state.currentSpeedKmh / 3.6;
+          const moveDist = speedMs * dt;
+          state.distanceRemaining -= moveDist * 0.65;
+
+          if (state.distanceRemaining <= 0) {
+            state.level++;
+            if (state.level > 10) {
+              state.mode = 'win';
+              clearSave();
+              resetKeys();
+              updateLayoutUI();
+              updateAudio(0, 1, false, false, false);
+              winScreen.classList.remove('hidden');
+              return;
+            }
+            state.distanceRemaining = 1000;
+            initTraffic();
+            saveGame();
+          }
+
+          // Автосохранение каждые 2 сек
+          if (Date.now() - state.lastSaveTime > 2000) {
+            saveGame();
+            state.lastSaveTime = Date.now();
+          }
+
+          // HUD & Звук
+          uiLevel.textContent = state.level;
+          uiDistance.textContent = Math.max(0, Math.floor(state.distanceRemaining));
+          uiSpeed.textContent = Math.round(state.currentSpeedKmh);
+          updateAudio(state.currentSpeedKmh, state.level, isGas, isTurbo, isBrake);
+
+          // Стоп-сигналы и выхлоп турбо
+          if (tailLightMat && brakeLightGlow) {
+            tailLightMat.color.setHex(isBrake ? 0xff4578 : 0xe61c5d);
+            brakeLightGlow.scale.setScalar(isBrake ? 1.45 : (isTurbo ? 1.25 : 1.0));
+          }
+          for (let i = 0; i < turboFlames.length; i++) {
+            const fl = turboFlames[i];
+            fl.visible = isTurbo;
+            if (isTurbo) {
+              fl.scale.set(0.85 + Math.random() * 0.4, 0.85 + Math.random() * 0.4, 0.8 + Math.random() * 0.9);
+            }
+          }
+
+          // Обновляем мир
+          updateWorldMotion(dt, moveDist, speedMs, isTurbo);
+
+          // Трафик и столкновения
+          for (let i = 0; i < trafficCars.length; i++) {
+            const tc = trafficCars[i];
+            const tcSpeedMs = tc.speedKmh / 3.6;
+            const relDist = (speedMs - tcSpeedMs) * dt;
+            tc.z += relDist;
+
+            // Вращение колес трафика
+            for (let w = 0; w < tc.wheels.length; w++) {
+              tc.wheels[w].rotation.x -= (tcSpeedMs / 0.36) * dt;
+            }
+
+            if (tc.z > 15) {
+              tc.z = -105 - Math.random() * 28;
+              const newLane = findSafeSpawnLane(tc.z);
+              if (newLane !== -1) {
+                tc.laneIdx = newLane;
+                tc.laneX = LANES[newLane];
+              }
+              tc.speedKmh = 42 + Math.random() * 34 + state.level * 2;
+            } else if (tc.z < -140) {
+              tc.z = -28;
+            }
+
+            const curveX = getRoadCurveX(tc.z, state.curCurve);
+            tc.group.position.set(tc.laneX + curveX, 0, tc.z);
+            tc.group.rotation.y = getRoadTangentAngle(tc.z, state.curCurve);
+
+            // Проверка ДТП
+            if (Math.abs(tc.z) < 4.05 && Math.abs(tc.laneX - state.playerX) < 1.68) {
+              state.mode = 'gameover';
+              state.distanceRemaining = 1000;
+              state.currentSpeedKmh = 45;
+              state.playerX = 0;
+              saveGame();
+              resetKeys();
+              playCrashSound();
+              updateAudio(0, state.level, false, false, false);
+              updateLayoutUI();
+              document.getElementById('gameover-info').textContent =
+                `Авария на уровне ${state.level}/10 (оставалось ${Math.max(0, Math.floor(state.distanceRemaining))} м).`;
+              gameoverScreen.classList.remove('hidden');
+              return;
+            }
+          }
+        } else {
+          // Фоновая красивая прокрутка в меню
+          const idleSpeedMs = 14;
+          updateWorldMotion(dt, idleSpeedMs * dt, idleSpeedMs, false);
+          updateAudio(0, 1, false, false, false);
+        }
+      }
+
+      function updateWorldMotion(dt, moveDist, speedMs, isTurbo) {
+        // Изгиб дороги
+        if (lastAppliedCurvature === null || Math.abs(state.curCurve - lastAppliedCurvature) > 0.00001) {
+          lastAppliedCurvature = state.curCurve;
+          applyRoadBend(roadGeo, roadBaseX, state.curCurve);
+          applyRoadBend(sideLeftGeo, sideLeftBaseX, state.curCurve);
+          applyRoadBend(sideRightGeo, sideRightBaseX, state.curCurve);
+        }
+
+        if (horizonBillboard) {
+          horizonBillboard.position.x = getRoadCurveX(-88, state.curCurve) * 0.65;
+        }
+
+        // Текстуры дороги и обочины
+        state.roadOffset += moveDist * 0.14;
+        roadTexture.offset.y = state.roadOffset;
+        sideLeftMat.map.offset.y = state.roadOffset * 1.65;
+        sideRightMat.map.offset.y = state.roadOffset * 1.65;
+
+        // Позиция и крен машины игрока
+        if (carRoot && carBodyGroup) {
+          carRoot.position.x = state.playerX;
+          carRoot.rotation.y = -state.playerSteer * 0.15;
+          const roadBounce = Math.sin(state.roadOffset * 18) * 0.006 * (isTurbo ? 2.2 : 1.0);
+          carBodyGroup.position.y = roadBounce;
+          carBodyGroup.rotation.z = -state.playerSteer * 0.06;
+          carBodyGroup.rotation.x = isTurbo ? -0.025 : 0;
+        }
+
+        for (let i = 0; i < playerWheels.length; i++) {
+          const w = playerWheels[i];
+          w.spinMesh.rotation.x -= (speedMs / w.radius) * dt;
+          if (w.isFront) w.pivot.rotation.y = -state.playerSteer * 0.34;
+        }
+
+        // Фонари
+        const totalSpan = poles.length * POLE_SPACING;
+        let near1 = null, near2 = null, d1 = Infinity, d2 = Infinity;
+        for (let i = 0; i < poles.length; i++) {
+          const p = poles[i];
+          p.z += moveDist;
+          if (p.z > 14) p.z -= totalSpan;
+          const cx = getRoadCurveX(p.z, state.curCurve);
+          p.group.position.set(4.55 + cx, 0, p.z);
+          p.group.rotation.y = -getRoadTangentAngle(p.z, state.curCurve);
+          const dist = Math.abs(p.z);
+          if (dist < d1) { d2 = d1; near2 = near1; d1 = dist; near1 = p; }
+          else if (dist < d2) { d2 = dist; near2 = p; }
+        }
+        if (near1) poleLightA.position.set(2.8 + getRoadCurveX(near1.z, state.curCurve), 5.4, near1.z);
+        if (near2) poleLightB.position.set(2.8 + getRoadCurveX(near2.z, state.curCurve), 5.4, near2.z);
+
+        // Деревья / дома
+        const props = state.envMode === 'city' ? cityProps : natureProps;
+        for (let i = 0; i < props.length; i++) {
+          const item = props[i];
+          item.z += moveDist;
+          if (item.z > 14) item.z -= PROP_SPAN;
+          const cx = getRoadCurveX(item.z, state.curCurve);
+          item.group.position.set(item.baseX + cx, 0, item.z);
+          if (state.envMode === 'city') item.group.rotation.y = -getRoadTangentAngle(item.z, state.curCurve);
+        }
+
+        // Камера (в альбомном режиме выше над машиной для отличного обзора 3 полос!)
+        state.camShake *= Math.exp(-6 * dt);
+        const speedFactor = Math.min(state.currentSpeedKmh / 180, 1);
+        const shake = (Math.random() - 0.5) * (state.camShake + (isTurbo ? 0.14 : 0)) * 0.18;
+
+        const targetCamX = state.playerX * 0.72;
+        const targetCamY = (state.isLandscape ? 3.45 : 2.55) + shake;
+        const targetCamZ = (state.isLandscape ? 7.1 : 6.7) + (isTurbo ? 0.75 : speedFactor * 0.35);
+
+        camera.position.x += (targetCamX - camera.position.x) * Math.min(1, dt * 6);
+        camera.position.y += (targetCamY - camera.position.y) * Math.min(1, dt * 6);
+        camera.position.z += (targetCamZ - camera.position.z) * Math.min(1, dt * 5);
+
+        const targetFov = (state.isLandscape ? 54 : 50) + speedFactor * 6 + (isTurbo ? 11 : 0);
+        if (Math.abs(camera.fov - targetFov) > 0.05) {
+          camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 5);
+          camera.updateProjectionMatrix();
+        }
+
+        const lookZ = state.isLandscape ? -18 : -14;
+        camera.lookAt(
+          state.playerX * 0.55 + getRoadCurveX(lookZ, state.curCurve) * 0.45,
+          state.isLandscape ? 0.65 : 0.85,
+          lookZ
+        );
+      }
+
+      function animate(now) {
+        requestAnimationFrame(animate);
+        const dt = state.lastTime ? Math.min((now - state.lastTime) / 1000, 0.05) : 0.016;
+        state.lastTime = now;
+        updateGame(dt);
+        renderer.render(scene, camera);
+      }
+
+      // --- Инициализация Three.js ---
+      function initThree() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 180);
+        camera.position.set(0, 2.7, 6.8);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+        renderer.setSize(window.innerWidth, window.innerHeight, false);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.24;
+        renderer.domElement.style.width = '100%';
+        renderer.domElement.style.height = '100%';
+        wrap.appendChild(renderer.domElement);
+
+        envRT = buildProceduralEnvMap(renderer);
+        scene.environment = envRT.texture;
+
+        buildSharedCarGeometries();
+        buildEnvironment();
+        worldGroup.add(buildPlayerCarModel());
+        initTraffic();
+      }
+
+      // --- Запуск / События UI ---
+      function requestSensors() {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          DeviceOrientationEvent.requestPermission()
+            .then((res) => { if (res === 'granted') window.addEventListener('deviceorientation', handleOrientation); })
+            .catch(() => {});
+        } else {
+          window.addEventListener('deviceorientation', handleOrientation);
+        }
+      }
+
+      function startRace(isNew) {
+        requestSensors();
+        initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+
+        if (isNew) {
+          clearSave();
+          state.level = 1;
+          state.distanceRemaining = 1000;
+          state.currentSpeedKmh = 45;
+          state.playerX = 0;
+          state.turboState = 'ready';
+          state.turboTimer = 0;
+        } else {
+          loadGame();
+        }
+
+        state.curCurve = 0;
+        state.targetCurve = 0;
+        state.calibrated = false;
+        resetKeys();
+        initTraffic();
+
+        startScreen.classList.add('hidden');
+        gameoverScreen.classList.add('hidden');
+        winScreen.classList.add('hidden');
+        settingsScreen.classList.add('hidden');
+
+        state.mode = 'playing';
+        updateLayoutUI();
+        updateTurboUI();
+        if (state.isLandscape) enterFullscreen();
+      }
+
+      document.getElementById('btn-start').addEventListener('click', () => startRace(true));
+      btnContinue.addEventListener('click', () => startRace(false));
+      document.getElementById('btn-retry').addEventListener('click', () => startRace(false));
+      document.getElementById('btn-play-again').addEventListener('click', () => startRace(true));
+      document.getElementById('btn-menu').addEventListener('click', () => {
+        gameoverScreen.classList.add('hidden');
+        startScreen.classList.remove('hidden');
+        refreshContinueBtn();
+        state.mode = 'menu';
+        updateLayoutUI();
+      });
+
+      document.getElementById('btn-settings').addEventListener('click', () => {
+        state.returnFromSettings = 'menu';
+        startScreen.classList.add('hidden');
+        settingsScreen.classList.remove('hidden');
+      });
+
+      btnPauseSettings.addEventListener('click', () => {
+        state.returnFromSettings = 'playing';
+        state.mode = 'paused';
+        resetKeys();
+        updateLayoutUI();
+        settingsScreen.classList.remove('hidden');
+      });
+
+      document.getElementById('btn-settings-back').addEventListener('click', () => {
+        settingsScreen.classList.add('hidden');
+        if (state.returnFromSettings === 'playing') {
+          state.mode = 'playing';
+          state.calibrated = false;
+          updateLayoutUI();
+        } else {
+          startScreen.classList.remove('hidden');
+        }
+      });
+
+      rngSens.addEventListener('input', () => {
+        state.sensitivity = Number(rngSens.value);
+        valSens.textContent = state.sensitivity.toFixed(1);
+      });
+
+      rngPitch.addEventListener('input', () => {
+        state.pitchSens = Number(rngPitch.value);
+        valPitch.textContent = state.pitchSens.toFixed(1);
+      });
+
+      btnFs.addEventListener('click', toggleFullscreen);
+      btnEnv.addEventListener('click', () => setEnvMode(state.envMode === 'nature' ? 'city' : 'nature'));
+
+      btnGyro.addEventListener('click', () => {
+        state.useGyro = !state.useGyro;
+        state.calibrated = false;
+        syncGyroUI();
+      });
+
+      btnTurbo.addEventListener('click', activateTurbo);
+      btnTurbo.addEventListener('touchstart', (e) => { e.preventDefault(); activateTurbo(); }, { passive: false });
+
+      function bindTouchControl(id, keyName) {
+        const el = document.getElementById(id);
+        const down = (e) => {
+          e.preventDefault();
+          state.keys[keyName] = true;
+          el.classList.add('active');
+          if (state.useGyro && state.isLandscape) {
+            state.useGyro = false;
+            syncGyroUI();
+          }
+        };
+        const up = (e) => {
+          e.preventDefault();
+          state.keys[keyName] = false;
+          el.classList.remove('active');
+        };
+        el.addEventListener('touchstart', down, { passive: false });
+        el.addEventListener('touchend', up);
+        el.addEventListener('touchcancel', up);
+        el.addEventListener('mousedown', down);
+        el.addEventListener('mouseup', up);
+        el.addEventListener('mouseleave', up);
+      }
+
+      bindTouchControl('btn-left', 'left');
+      bindTouchControl('btn-right', 'right');
+      bindTouchControl('btn-gas', 'gas');
+      bindTouchControl('btn-brake', 'brake');
+
+      // Клавиатура (ПК)
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { state.keys.left = true; state.useGyro = false; syncGyroUI(); }
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { state.keys.right = true; state.useGyro = false; syncGyroUI(); }
+        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { state.keys.gas = true; state.useGyro = false; syncGyroUI(); }
+        if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { state.keys.brake = true; state.useGyro = false; syncGyroUI(); }
+        if (e.code === 'Space' || e.key === 'Shift') activateTurbo();
+      });
+      window.addEventListener('keyup', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.keys.left = false;
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.keys.right = false;
+        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') state.keys.gas = false;
+        if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') state.keys.brake = false;
+      });
+
+      // Тап по краям экрана в портрете как запасной вариант
+      wrap.addEventListener('touchstart', (e) => {
+        if (state.mode !== 'playing' || state.isLandscape) return;
+        const x = e.touches[0].clientX;
+        if (x < window.innerWidth * 0.45) { state.keys.left = true; state.keys.right = false; }
+        else if (x > window.innerWidth * 0.55) { state.keys.right = true; state.keys.left = false; }
+      }, { passive: true });
+      wrap.addEventListener('touchend', () => {
+        if (!state.isLandscape) { state.keys.left = false; state.keys.right = false; }
+      });
+
+      function refreshContinueBtn() {
+        try {
+          const raw = localStorage.getItem(SAVE_KEY);
+          if (raw) {
+            const d = JSON.parse(raw);
+            btnContinue.textContent = `Продолжить (Ур. ${d.level || 1})`;
+            btnContinue.classList.remove('hidden');
+          } else {
+            btnContinue.classList.add('hidden');
+          }
+        } catch (e) {}
+      }
+      refreshContinueBtn();
+      window.addEventListener('pagehide', () => { if (state.mode === 'playing') saveGame(); });
+      document.addEventListener('visibilitychange', () => { if (document.hidden && state.mode === 'playing') saveGame(); });
+
+      initThree();
+      updateLayoutUI();
+      requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>
